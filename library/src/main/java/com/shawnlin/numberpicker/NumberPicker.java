@@ -22,6 +22,7 @@ import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.method.NumberKeyListener;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.KeyEvent;
@@ -34,8 +35,10 @@ import android.view.ViewConfiguration;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import java.lang.annotation.Retention;
 import java.text.DecimalFormatSymbols;
@@ -115,6 +118,8 @@ public class NumberPicker extends LinearLayout {
      * The default min width of this widget.
      */
     private static final int DEFAULT_MIN_WIDTH = 64;
+
+    private boolean isKeyboardInput = false;
 
     /**
      * Use a custom NumberPicker formatting callback to use two-digit minutes
@@ -587,9 +592,9 @@ public class NumberPicker extends LinearLayout {
 
         // input text
         mInputText = (EditText) findViewById(R.id.np__numberpicker_input);
-        mInputText.setEnabled(false);
+        /*mInputText.setEnabled(false);
         mInputText.setFocusable(false);
-        mInputText.setImeOptions(EditorInfo.IME_ACTION_NONE);
+        mInputText.setImeOptions(EditorInfo.IME_ACTION_NONE);*/
         mInputText.setTextColor(mTextColor);
 
         // create the selector wheel paint
@@ -737,11 +742,13 @@ public class NumberPicker extends LinearLayout {
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
+        Log.d("numpick","onInterceptTouchEvent");
         if (!isEnabled()) {
             return false;
         }
 
         final int action = event.getAction() & MotionEvent.ACTION_MASK;
+
         switch (action) {
             case MotionEvent.ACTION_DOWN: {
                 removeAllCallbacks();
@@ -788,6 +795,7 @@ public class NumberPicker extends LinearLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+
         if (!isEnabled()) {
             return false;
         }
@@ -797,6 +805,10 @@ public class NumberPicker extends LinearLayout {
         mVelocityTracker.addMovement(event);
         int action = event.getAction() & MotionEvent.ACTION_MASK;
         switch (action) {
+            case MotionEvent.ACTION_DOWN: {
+                isKeyboardInput = true;
+                break;
+            }
             case MotionEvent.ACTION_MOVE: {
                 if (isHorizontalMode()) {
                     float currentMoveX = event.getX();
@@ -806,10 +818,14 @@ public class NumberPicker extends LinearLayout {
                             removeAllCallbacks();
                             onScrollStateChange(OnScrollListener.SCROLL_STATE_TOUCH_SCROLL);
                         }
+                        //Log.d("numpick","onTouchEvent1");
+                        //isKeyboardInput = true;
                     } else {
                         int deltaMoveX = (int) ((currentMoveX - mLastDownOrMoveEventX));
                         scrollBy(deltaMoveX, 0);
                         invalidate();
+                        //Log.d("numpick","onTouchEvent2");
+                        isKeyboardInput = false;
                     }
                     mLastDownOrMoveEventX = currentMoveX;
                 } else {
@@ -824,6 +840,7 @@ public class NumberPicker extends LinearLayout {
                         int deltaMoveY = (int) ((currentMoveY - mLastDownOrMoveEventY));
                         scrollBy(0, deltaMoveY);
                         invalidate();
+                        isKeyboardInput = false;
                     }
                     mLastDownOrMoveEventY = currentMoveY;
                 }
@@ -880,9 +897,38 @@ public class NumberPicker extends LinearLayout {
                 }
                 mVelocityTracker.recycle();
                 mVelocityTracker = null;
+                //andy
+                if (isKeyboardInput) {
+                    mInputText.setVisibility(View.VISIBLE);
+                    mInputText.setActivated(true);
+                    mInputText.setFocusable(true);
+                    mInputText.requestFocus();
+                    mInputText.selectAll();
+                    final InputMethodManager imm = (InputMethodManager) mContext.getSystemService(mContext.INPUT_METHOD_SERVICE);
+                    imm.toggleSoftInput(1, 0);
+                    mInputText.setOnKeyListener(new OnKeyListener() {
+                        @Override
+                        public boolean onKey(View view, int keyCode, KeyEvent keyEvent) {
+                            if (keyEvent.getAction() == KeyEvent.ACTION_DOWN &&
+                                    (keyCode == KeyEvent.KEYCODE_ENTER)) {
+                                setValue(Integer.parseInt(mInputText.getText().toString()));
+                                //mInputText.setText(String.valueOf(getValue()));
+                                //mInputText.setActivated(false);
+                                /*mInputText.setFocusable(false);*/
+                                mInputText.clearFocus();
+                                mInputText.setVisibility(View.INVISIBLE);
+                                imm.hideSoftInputFromWindow(getWindowToken(),InputMethodManager.HIDE_NOT_ALWAYS); //hideSoftInputFromInputMethod(getWindowToken(),InputMethodManager.HIDE_NOT_ALWAYS);
+                                return true;
+                            }
+                            return false;
+                        }
+                    });
+                    isKeyboardInput = false;
+                }
             }
             break;
         }
+
         return true;
     }
 
@@ -1524,12 +1570,12 @@ public class NumberPicker extends LinearLayout {
             return;
         }
         // Wrap around the values if we go past the start or end
-        if (mWrapSelectorWheel) {
+        /*if (mWrapSelectorWheel) {
             current = getWrappedSelectorIndex(current);
-        } else {
+        } else {*/
             current = Math.max(current, mMinValue);
             current = Math.min(current, mMaxValue);
-        }
+        //}
         int previous = mValue;
         mValue = current;
         updateInputTextView();
